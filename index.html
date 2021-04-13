@@ -1,0 +1,60 @@
+<head>
+  <style> body { margin: 0; } </style>
+
+  <script src="https://unpkg.com/3d-force-graph"></script>
+  <script src="https://unpkg.com/neo4j-driver"></script>
+  <!--<script src="../../dist/3d-force-graph.js"></script>-->
+</head>
+
+<body>
+  <div id="3d-graph"></div>
+
+  <script type="text/javascript">
+  const elem = document.getElementById('3d-graph');
+  const driver = neo4j.driver('bolt://3.239.191.134:7687', neo4j.auth.basic('neo4j', 'crash-sterilizer-ohm'), {/*encrypted: true*/});
+  const session = driver.session({database:"neo4j"});
+
+const query = 
+// MATCH
+//   (u:Me:User)-[p:POSTS]->(t:Tweet)-[:MENTIONS]->(m:User)
+// WITH
+//   u,p,t,m, COUNT(m.screen_name) AS count
+// ORDER BY 
+//   count DESC
+// RETURN
+//   u,p,t,m
+// LIMIT 10
+`
+MATCH
+  (u:User:Me)-[p:POSTS]->(t:Tweet)-[:MENTIONS]->(m:User)
+RETURN
+  m.screen_name AS screen_name, COUNT(m.screen_name) AS count 
+ORDER BY 
+  count DESC
+LIMIT 200
+  `;
+
+session.run(query)
+  .then((result) => {
+
+  	console.log(result);
+
+  	const links = result.records.map(r => { return {source:r.get('screen_name'), target:r.get('count').toNumber()}});
+
+    const ids = new Set()
+    links.forEach(l => {ids.add(l.source);ids.add(l.target);});
+    const gData = { nodes: Array.from(ids).map(id => {return {id}}), links: links}
+    const Graph = ForceGraph3D()(document.getElementById('3d-graph'))
+                      .graphData(gData)
+                      .nodeAutoColorBy('screen_name')
+                      .nodeLabel(node => `${node.screen_name}`)
+                      .onNodeHover(node => elem.style.cursor = node ? 'pointer' : null);
+
+    session.close();
+    driver.close();
+  })
+  .catch((error) => {
+    console.error(error);
+  });
+  </script>
+</body>
